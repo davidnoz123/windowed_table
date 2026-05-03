@@ -6,6 +6,10 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from main import app
+import main
+from db import init_db
+
+main.db_conn = init_db()
 
 client = TestClient(app)
 
