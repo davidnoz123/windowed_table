@@ -27,3 +27,9 @@ frontend/playwright-report/
 .DS_Store
 Thumbs.db
 *.log
+
+# DataAnnotation worker files
+problem.txt
+opencode.json
+.opencode/
+problem_checker_results.md
