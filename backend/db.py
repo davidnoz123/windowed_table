@@ -38,12 +38,16 @@ def init_db() -> sqlite3.Connection:
     for i in range(1, 10001):
         first = random.choice(FIRST_NAMES)
         last = random.choice(LAST_NAMES)
+        
+        department = random.choice(DEPARTMENTS) if random.random() > 0.03 else None
+        value = round(random.uniform(0.0, 10000.0), 2) if random.random() > 0.03 else None
+        
         rows.append((
             i,
             f"{first} {last}",
             random.choice(STATUSES),
-            random.choice(DEPARTMENTS),
-            round(random.uniform(0.0, 10000.0), 2),
+            department,
+            value,
             str(start_date + timedelta(days=random.randint(0, 365 * 4))),
         ))
     
@@ -115,7 +119,7 @@ def build_order_by_clause(sort: list) -> str:
     for s in sort:
         field = s.field
         direction = s.direction.upper()
-        order_terms.append(f"{field} IS NULL ASC")
+        order_terms.append(f"{field} IS NULL DESC")
         
         if field in numeric_fields:
             order_terms.append(f"CAST({field} AS REAL) {direction}")

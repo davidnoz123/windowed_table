@@ -134,13 +134,19 @@ def test_sort_name_desc():
 def test_sort_value_asc():
     r = post_query(count=100, sort=[{"field": "value", "direction": "asc"}])
     values = [row["value"] for row in r.json()["rows"]]
-    assert values == sorted(values)
+    non_null_values = [v for v in values if v is not None]
+    null_values = [v for v in values if v is None]
+    assert non_null_values == sorted(non_null_values)
+    assert all(v is None for v in null_values)
 
 
 def test_sort_value_desc():
     r = post_query(count=100, sort=[{"field": "value", "direction": "desc"}])
     values = [row["value"] for row in r.json()["rows"]]
-    assert values == sorted(values, reverse=True)
+    non_null_values = [v for v in values if v is not None]
+    null_values = [v for v in values if v is None]
+    assert non_null_values == sorted(non_null_values, reverse=True)
+    assert all(v is None for v in null_values)
 
 
 # ---------------------------------------------------------------------------
@@ -158,7 +164,10 @@ def test_filter_sort_pagination():
     rows = data["rows"]
     assert all(row["status"] == "active" for row in rows)
     values = [row["value"] for row in rows]
-    assert values == sorted(values)
+    non_null_values = [v for v in values if v is not None]
+    null_values = [v for v in values if v is None]
+    assert non_null_values == sorted(non_null_values)
+    assert all(v is None for v in null_values)
 
 
 def test_pagination_consistent_across_pages():
@@ -254,7 +263,10 @@ def test_multi_column_sort():
     
     for i in range(len(rows) - 1):
         if rows[i]["status"] == rows[i+1]["status"]:
-            assert rows[i]["value"] >= rows[i+1]["value"]
+            if rows[i]["value"] is not None and rows[i+1]["value"] is not None:
+                assert rows[i]["value"] >= rows[i+1]["value"]
+            elif rows[i]["value"] is None and rows[i+1]["value"] is not None:
+                assert False, "NULL should come after non-NULL"
 
 
 def test_sort_case_insensitive():
@@ -286,7 +298,10 @@ def test_filter_then_sort_then_window():
     assert len(data["rows"]) == 10
     assert all(row["status"] == "active" for row in data["rows"])
     values = [row["value"] for row in data["rows"]]
-    assert values == sorted(values)
+    non_null_values = [v for v in values if v is not None]
+    null_values = [v for v in values if v is None]
+    assert non_null_values == sorted(non_null_values)
+    assert all(v is None for v in null_values)
 
 
 def test_filter_in_operator_with_multiple_values():
@@ -357,3 +372,53 @@ def test_get_distinct_invalid_field():
     assert r.status_code == 200
     data = r.json()
     assert data["values"] == []
+
+
+def test_filter_neq_excludes_nulls():
+    r = post_query(count=10000, filters=[{"field": "department", "op": "neq", "value": "Engineering"}])
+    data = r.json()
+    for row in data["rows"]:
+        assert row["department"] is not None
+        assert row["department"] != "Engineering"
+
+
+def test_filter_gt_excludes_nulls():
+    r = post_query(count=10000, filters=[{"field": "value", "op": "gt", "value": 0}])
+    data = r.json()
+    for row in data["rows"]:
+        assert row["value"] is not None
+        assert row["value"] > 0
+
+
+def test_sort_asc_nulls_last():
+    r = post_query(count=10000, sort=[{"field": "value", "direction": "asc"}])
+    data = r.json()
+    rows = data["rows"]
+    
+    non_null_count = sum(1 for row in rows if row["value"] is not None)
+    null_count = sum(1 for row in rows if row["value"] is None)
+    
+    assert null_count > 0
+    
+    for i in range(non_null_count):
+        assert rows[i]["value"] is not None
+    
+    for i in range(non_null_count, len(rows)):
+        assert rows[i]["value"] is None
+
+
+def test_sort_desc_nulls_last():
+    r = post_query(count=10000, sort=[{"field": "department", "direction": "desc"}])
+    data = r.json()
+    rows = data["rows"]
+    
+    non_null_count = sum(1 for row in rows if row["department"] is not None)
+    null_count = sum(1 for row in rows if row["department"] is None)
+    
+    assert null_count > 0
+    
+    for i in range(non_null_count):
+        assert rows[i]["department"] is not None
+    
+    for i in range(non_null_count, len(rows)):
+        assert rows[i]["department"] is None
