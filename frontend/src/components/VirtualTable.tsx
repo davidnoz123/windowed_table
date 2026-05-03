@@ -8,7 +8,8 @@ import {
 } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { queryTable, type SortField, type FilterField, type TableRow } from '../api/tableApi'
+import { queryTable, getDistinctValues, type SortField, type FilterField, type TableRow } from '../api/tableApi'
+import { MultiSelectFilter } from './MultiSelectFilter'
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -50,18 +51,41 @@ function useDebounce<T>(value: T, delay: number): T {
 export function VirtualTable() {
   const parentRef = useRef<HTMLDivElement>(null)
 
-  // sort / filter state
+  const { data: statusOptions = [] } = useQuery({
+    queryKey: ['distinct', 'status'],
+    queryFn: () => getDistinctValues('status'),
+  })
+
+  const { data: departmentOptions = [] } = useQuery({
+    queryKey: ['distinct', 'department'],
+    queryFn: () => getDistinctValues('department'),
+  })
+
   const [sort, setSort] = useState<SortField[]>([])
   const [rawFilters, setRawFilters] = useState<Record<string, string>>({})
+  const [selectedStatus, setSelectedStatus] = useState<string[]>([])
+  const [selectedDepartment, setSelectedDepartment] = useState<string[]>([])
   const debouncedRawFilters = useDebounce(rawFilters, DEBOUNCE_MS)
 
-  const filtersArray = useMemo<FilterField[]>(
-    () =>
-      Object.entries(debouncedRawFilters)
-        .filter(([, v]) => v.trim() !== '')
-        .map(([field, value]) => ({ field, op: 'contains' as const, value })),
-    [debouncedRawFilters],
-  )
+  const filtersArray = useMemo<FilterField[]>(() => {
+    const filters: FilterField[] = []
+    
+    Object.entries(debouncedRawFilters)
+      .filter(([, v]) => v.trim() !== '')
+      .forEach(([field, value]) => {
+        filters.push({ field, op: 'contains' as const, value })
+      })
+    
+    if (selectedStatus.length > 0 && selectedStatus.length < statusOptions.length) {
+      filters.push({ field: 'status', op: 'in' as const, value: selectedStatus })
+    }
+    
+    if (selectedDepartment.length > 0 && selectedDepartment.length < departmentOptions.length) {
+      filters.push({ field: 'department', op: 'in' as const, value: selectedDepartment })
+    }
+    
+    return filters
+  }, [debouncedRawFilters, selectedStatus, selectedDepartment, statusOptions.length, departmentOptions.length])
 
   // total rows (seeded with assumed default; updated from API)
   const [totalRows, setTotalRows] = useState(10000)
@@ -91,10 +115,19 @@ export function VirtualTable() {
     if (data?.total !== undefined) setTotalRows(data.total)
   }, [data?.total])
 
-  // scroll to top when sort / filters change
   useEffect(() => {
-    if (parentRef.current) parentRef.current.scrollTop = 0
+    if (parentRef.current) {
+      parentRef.current.scrollTop = 0
+    }
   }, [sort, filtersArray])
+
+  const handleStatusChange = useCallback((selected: string[]) => {
+    setSelectedStatus(selected)
+  }, [])
+
+  const handleDepartmentChange = useCallback((selected: string[]) => {
+    setSelectedDepartment(selected)
+  }, [])
 
   // map virtualizer index -> row
   const rowMap = useMemo(() => {
@@ -103,6 +136,11 @@ export function VirtualTable() {
       data.rows.forEach((row, i) => map.set(windowStart + i, row))
     }
     return map
+  }, [data, windowStart])
+  
+  const isStaleData = useMemo(() => {
+    if (!data) return false
+    return data.start !== windowStart
   }, [data, windowStart])
 
   // ─── handlers ──────────────────────────────────────────────────────────────
@@ -136,16 +174,42 @@ export function VirtualTable() {
 
       {/* ── Filter bar ── */}
       <div style={{ display: 'flex', gap: 4, padding: '8px 0', flexWrap: 'wrap' }}>
-        {COLUMNS.map(col => (
-          <input
-            key={col.field}
-            data-testid={`filter-${col.field}`}
-            placeholder={`Filter ${col.label}…`}
-            value={rawFilters[col.field] ?? ''}
-            onChange={e => handleFilterChange(col.field, e)}
-            style={{ width: col.width - 8, padding: '4px 6px', border: '1px solid #ccc', borderRadius: 3 }}
-          />
-        ))}
+        {COLUMNS.map(col => {
+          if (col.field === 'status') {
+            return (
+              <MultiSelectFilter
+                key={col.field}
+                label={col.label}
+                options={statusOptions}
+                selected={selectedStatus}
+                onChange={handleStatusChange}
+                width={col.width}
+              />
+            )
+          }
+          if (col.field === 'department') {
+            return (
+              <MultiSelectFilter
+                key={col.field}
+                label={col.label}
+                options={departmentOptions}
+                selected={selectedDepartment}
+                onChange={handleDepartmentChange}
+                width={col.width}
+              />
+            )
+          }
+          return (
+            <input
+              key={col.field}
+              data-testid={`filter-${col.field}`}
+              placeholder={`Filter ${col.label}…`}
+              value={rawFilters[col.field] ?? ''}
+              onChange={e => handleFilterChange(col.field, e)}
+              style={{ width: col.width - 8, padding: '4px 6px', border: '1px solid #ccc', borderRadius: 3 }}
+            />
+          )
+        })}
       </div>
 
       {/* ── Column headers ── */}
@@ -211,7 +275,7 @@ export function VirtualTable() {
                   borderBottom: '1px solid #eee',
                 }}
               >
-                {row ? (
+                {row && !isStaleData ? (
                   COLUMNS.map(col => (
                     <div
                       key={col.field}

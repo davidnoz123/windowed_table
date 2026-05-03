@@ -1,0 +1,48 @@
+Enhance the windowed table so that server-side filtering, sorting, and scroll windowing behave correctly and consistently across the React frontend and FastAPI backend.
+
+Requirements:
+
+1. Backend query semantics
+- The /table/query endpoint must apply filters first, then sorting, then the requested start/count window.
+- start must be clamped to 0 if negative.
+- count must be clamped to a sensible maximum of 200.
+- If start is beyond the filtered total, return an empty rows array with the correct total.
+- The response must include total, start, count, and rows.
+
+2. Filtering
+- Support these filter operators: eq, neq, contains, gt, gte, lt, lte.
+- contains must be case-insensitive.
+- contains must work safely when the field value is null or missing.
+- Numeric comparisons must not crash on missing values, null values, or non-numeric values; rows that cannot be compared numerically should not match that numeric filter.
+
+3. Sorting
+- Support multi-column sorting.
+- Sorting must be stable.
+- Missing/null values must always sort after real values, for both ascending and descending sorts.
+- String sorting should be case-insensitive but preserve the original row values.
+
+4. Frontend behavior
+- The table must use fixed-height rows and virtual/windowed loading.
+- Scrolling must request the correct backend window for the visible row range plus reasonable overscan.
+- Changing filters or sorting must reset the scroll position to the top and request data starting at row 0.
+- While a new window is loading, the table should avoid showing rows from an incompatible previous filter/sort state.
+
+5. Tests
+- Add automated tests for the backend query behavior.
+- Add frontend tests that verify sorting/filtering state causes the correct backend query payload.
+- Add at least one test covering scroll-window calculation.
+- Existing build/test commands should continue to work.
+
+6. Multi-select filtering for enumerable fields
+- The /table/query endpoint must support a new filter operator: "in", which accepts an array of values and matches rows where the field value is one of them.
+- The "in" operator must be case-insensitive for string fields.
+- An empty array for the "in" operator must be treated as "no filter" — it must not exclude any rows.
+- The frontend must render a multi-select checkbox dropdown for the "status" and "department" fields, replacing the plain text inputs for those two fields.
+- When no checkboxes are checked, all rows are shown (equivalent to no filter on that field).
+- When all available values are checked, all rows are shown (equivalent to no filter on that field).
+- When a strict subset of values is checked, only rows whose field value is one of the checked values are shown.
+- Changing the checkbox selection must reset the scroll position to the top and request data starting at row 0, consistent with how other filter changes behave.
+- The multi-select filter must compose correctly with other active filters (e.g., a "contains" filter on "name" and a multi-select on "status" must both apply, not one or the other).
+- The available options for each dropdown must be derived from the distinct values present in the full unfiltered dataset, not hardcoded.
+
+Do not replace the app with a completely different table library or remove the existing FastAPI/React structure. Keep the implementation small and focused on the behavior above.

@@ -7,8 +7,8 @@ export interface SortField {
 
 export interface FilterField {
   field: string
-  op: 'eq' | 'neq' | 'contains' | 'gt' | 'gte' | 'lt' | 'lte'
-  value: string | number
+  op: 'eq' | 'neq' | 'contains' | 'gt' | 'gte' | 'lt' | 'lte' | 'in'
+  value: string | number | string[]
 }
 
 export interface TableRow {
@@ -29,6 +29,8 @@ export interface TableQueryParams {
 
 export interface TableResponse {
   total: number
+  start: number
+  count: number
   rows: TableRow[]
 }
 
@@ -42,4 +44,13 @@ export async function queryTable(params: TableQueryParams): Promise<TableRespons
     throw new Error(`API error: ${res.status}`)
   }
   return res.json() as Promise<TableResponse>
+}
+
+export async function getDistinctValues(field: string): Promise<string[]> {
+  const res = await fetch(`${API_BASE}/table/distinct/${field}`)
+  if (!res.ok) {
+    throw new Error(`API error: ${res.status}`)
+  }
+  const data = await res.json()
+  return data.values
 }

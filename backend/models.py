@@ -1,16 +1,16 @@
 from pydantic import BaseModel
-from typing import List, Any
+from typing import List, Any, Union
 
 
 class SortField(BaseModel):
     field: str
-    direction: str  # "asc" | "desc"
+    direction: str
 
 
 class FilterField(BaseModel):
     field: str
-    op: str  # "eq" | "neq" | "contains" | "gt" | "gte" | "lt" | "lte"
-    value: Any
+    op: str
+    value: Union[Any, List[Any]]
 
 
 class TableQuery(BaseModel):
@@ -22,4 +22,6 @@ class TableQuery(BaseModel):
 
 class TableResponse(BaseModel):
     total: int
+    start: int
+    count: int
     rows: List[dict]
